@@ -278,21 +278,41 @@
     // integrate + collide
     moveAxis(p, p.vx * dt, 0);
     const wasGrounded = p.grounded;
+    const prevBottom = p.y + p.h;
     p.grounded = false;
     moveAxis(p, 0, p.vy * dt);
     if (p.grounded && !wasGrounded && p.vy >= 0) sfx.land();
 
-    // moving platforms carry player
+    // one-way drifting platforms: land when the player's bottom edge
+    // crosses the platform top while falling (no drop-through)
     for (const pl of state.platforms) {
-      if (onPlatform(p, pl)) {
-        p.x += pl.dx || 0;
+      const px = p.x + p.w / 2;
+      if (px < pl.x - 2 || px > pl.x + pl.w + 2) continue;
+      const bottom = p.y + p.h;
+      if (p.vy >= 0 && prevBottom <= pl.y + 2 && bottom >= pl.y - 2) {
+        p.y = pl.y - p.h;
+        p.vy = 0;
         p.grounded = true;
-        p.coyote = COYOTE;
-        p.jumps = 0;
+        if (!wasGrounded) sfx.land();
       }
     }
 
-    if (p.grounded) { p.coyote = COYOTE; p.jumps = 0; }
+    // keep the player pinned to the drifting platform they stand on,
+    // and carry them along with it
+    if (p.grounded) {
+      for (const pl of state.platforms) {
+        const px = p.x + p.w / 2;
+        if (px < pl.x - 2 || px > pl.x + pl.w + 2) continue;
+        if (Math.abs((p.y + p.h) - pl.y) < 3) {
+          p.y = pl.y - p.h;
+          p.vy = 0;
+          p.x += pl.dx || 0;
+          break;
+        }
+      }
+      p.coyote = COYOTE;
+      p.jumps = 0;
+    }
 
     // trail
     p.trail.push({ x: p.x + p.w / 2, y: p.y + p.h / 2, life: 1 });
@@ -322,11 +342,6 @@
     }
   }
 
-  function onPlatform(p, pl) {
-    const px = p.x + p.w / 2;
-    const py = p.y + p.h;
-    return px > pl.x && px < pl.x + pl.w && Math.abs(py - pl.y) < 10 && p.vy >= 0;
-  }
 
   function rectOverlap(a, b, pad = 0) {
     return a.x + pad < b.x + b.w && a.x + a.w - pad > b.x &&
