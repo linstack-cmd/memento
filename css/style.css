@@ -145,6 +145,17 @@ html, body {
   z-index: 5;
 }
 
+/* Level fade */
+#fade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #04040a;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+  z-index: 6;
+}
+
 @media (max-width: 640px) {
   #hud { padding: 16px 18px; }
   #overlay-title { letter-spacing: 8px; }
