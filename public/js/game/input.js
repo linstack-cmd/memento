@@ -20,17 +20,173 @@ const KEYMAP = {
   KeyM: 'mute',
 };
 
+// DOM touch buttons (item 8) map into the same per-pointer zone system, so a
+// held button and a canvas-zone touch both feed the one `touches` Map.
+const TOUCH_BUTTONS = [
+  { id: 'btn-left', zone: 'left' },
+  { id: 'btn-right', zone: 'right' },
+  { id: 'btn-jump', zone: 'jump' },
+  { id: 'btn-tether', zone: 'tether' },
+];
+
 export function createInput(callbacks) {
   const keys = new Set();
   const pressQueue = [];      // one-shot presses consumed once per tick
   let consume = false;
 
+  // --- touch state ---------------------------------------------------------
+  // Per-pointer zone map (Iris B3/B4 + items 2,3): exactly ONE zone per active
+  // pointer, and only the ending pointer's zone is cleared. Action pointers
+  // (jump/tether) NEVER also set directional movement (Iris B2 + item 2).
+  // One-shot presses are queued only on pointer DOWN (item 5) — move events
+  // never re-classify or re-queue.
+  const touches = new Map();   // pointerId -> zone ('left'|'right'|'down'|'jump'|'tether')
+  let jumpQueued = false;
+  let tetherQueued = false;
+  let touchEnabled = false;    // gated to in-game: playing && !paused && no overlay (item 11)
+  let zones = null;            // cached canvas bounding rect (item 7)
+
+  const getCanvas = () => (typeof document !== 'undefined' ? document.getElementById('game') : null);
+
+  // Zones are computed from the CANVAS bounding rect, not the window, so they
+  // survive letterboxing (item 7). Recomputed on resize/orientation (item 12).
+  function computeZones() {
+    const c = getCanvas();
+    if (!c || typeof c.getBoundingClientRect !== 'function') { zones = null; return; }
+    const r = c.getBoundingClientRect();
+    zones = { left: r.left, top: r.top, w: r.width, h: r.height };
+  }
+
+  // Classify a canvas-relative point into EXACTLY ONE non-overlapping zone.
+  //   left half  -> 'left', or 'down' (drop-through) when y > 0.82h
+  //   right half -> 'jump'   (x >= 0.82w, y >= 0.6h)
+  //                 'tether' (0.62w <= x < 0.82w, 0.6h <= y < 0.78h)
+  //                 'right'  (everything else on the right half)
+  // Order matters: jump is checked before tether so the two are exclusive
+  // (Iris B3 + item 4) — tapping the documented jump zone actually jumps.
+  function classifyZone(x, y) {
+    if (!zones || zones.w === 0 || zones.h === 0) return null;
+    const w = zones.w, h = zones.h;
+    if (x < w * 0.5) return y > h * 0.82 ? 'down' : 'left';
+    if (x >= w * 0.82 && y >= h * 0.6) return 'jump';
+    if (x >= w * 0.62 && y >= h * 0.6 && y < h * 0.78) return 'tether';
+    return 'right';
+  }
+
+  function queueAction(zone) {
+    if (zone === 'jump') jumpQueued = true;
+    else if (zone === 'tether') tetherQueued = true;
+  }
+
+  // Shared pointer/touch "down" logic (pointer events primary, touch fallback).
+  function handleDown(id, clientX, clientY, pointerType) {
+    if (!touchEnabled) return;                    // item 11: zones only live in-game
+    const c = getCanvas();
+    if (!c || typeof c.getBoundingClientRect !== 'function') return;
+    const rect = c.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    zones = { left: rect.left, top: rect.top, w: rect.width, h: rect.height };
+    const zone = classifyZone(clientX - rect.left, clientY - rect.top);
+    if (!zone) return;
+    touches.set(id, zone);
+    queueAction(zone);
+  }
+
+  const onPointerDown = (e) => {
+    // Ignore non-primary mouse pointers (multi-button / synthetic) but allow
+    // every touch pointer.
+    if (e.pointerType === 'mouse' && !e.isPrimary) return;
+    handleDown(e.pointerId, e.clientX, e.clientY, e.pointerType);
+    if (touches.has(e.pointerId)) {
+      // Safe: this handler is canvas-only, so it never runs over buttons,
+      // overlays, or the HUD (item 1) — no click is ever swallowed.
+      e.preventDefault();
+      try { getCanvas().setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
+  };
+  const onPointerMove = () => { /* zone fixed per pointer at DOWN (item 5) */ };
+  const onPointerUp = (e) => { touches.delete(e.pointerId); };  // only the ending finger (item 3)
+
+  // Touch-event fallback for browsers without PointerEvent.
+  const onTouchStart = (e) => {
+    for (const t of e.changedTouches) handleDown(t.identifier, t.clientX, t.clientY, 'touch');
+    if (touchEnabled) e.preventDefault();
+  };
+  const onTouchEnd = (e) => { for (const t of e.changedTouches) touches.delete(t.identifier); };
+
+  function attachCanvas() {
+    const c = getCanvas();
+    if (!c || typeof c.addEventListener !== 'function') return;
+    if (window.PointerEvent) {
+      c.addEventListener('pointerdown', onPointerDown);
+      c.addEventListener('pointermove', onPointerMove);
+      c.addEventListener('pointerup', onPointerUp);
+      c.addEventListener('pointercancel', onPointerUp);
+      c.addEventListener('lostpointercapture', onPointerUp);
+    } else {
+      c.addEventListener('touchstart', onTouchStart, { passive: false });
+      c.addEventListener('touchmove', () => {}, { passive: false });
+      c.addEventListener('touchend', onTouchEnd, { passive: false });
+      c.addEventListener('touchcancel', onTouchEnd, { passive: false });
+    }
+  }
+
+  // DOM touch-control buttons (◀ ▶ JUMP TETHER) — item 8. They feed the same
+  // per-pointer zone map with synthetic ids, so movement + action work together.
+  function bindTouchButtons() {
+    for (const { id, zone } of TOUCH_BUTTONS) {
+      const el = document.getElementById(id);
+      if (!el || typeof el.addEventListener !== 'function') continue;
+      if (window.PointerEvent) {
+        const down = (e) => {
+          if (!touchEnabled) return;              // item 11
+          e.preventDefault();                     // button-level only; never global
+          try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+          touches.set('btn:' + zone, zone);
+          queueAction(zone);
+        };
+        const up = () => touches.delete('btn:' + zone);
+        el.addEventListener('pointerdown', down);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+        el.addEventListener('lostpointercapture', up);
+      } else {
+        const down = (e) => { if (!touchEnabled) return; e.preventDefault(); touches.set('btn:' + zone, zone); queueAction(zone); };
+        const up = () => touches.delete('btn:' + zone);
+        el.addEventListener('touchstart', down, { passive: false });
+        el.addEventListener('touchend', up, { passive: false });
+        el.addEventListener('touchcancel', up, { passive: false });
+      }
+    }
+  }
+
+  attachCanvas();
+  bindTouchButtons();
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('resize', computeZones);           // item 12
+    window.addEventListener('orientationchange', computeZones);
+  }
+  computeZones();
+
   // expose a way for the loop to know whether a one-shot is pending
   const api = {
     keys,
     consume: () => (consume ? 1 : 0),
-    clear: () => { keys.clear(); pressQueue.length = 0; },
+    clear: () => {
+      keys.clear();
+      pressQueue.length = 0;
+      // item 6: reset per-pointer touches + one-shot queues too, so held
+      // touches never leak across pause/restart/level transitions.
+      touches.clear();
+      jumpQueued = false;
+      tetherQueued = false;
+    },
     setConsume: (v) => { consume = v; },
+    setTouchEnabled: (v) => { touchEnabled = !!v; },
+    isTouchEnabled: () => touchEnabled,
+    recomputeZones: computeZones,
+    // test hook (browser-smoke / DOM-mock): copy of active touch zones
+    getTouchZones: () => new Map(touches),
   };
 
   window.addEventListener('keydown', (e) => {
@@ -62,39 +218,6 @@ export function createInput(callbacks) {
     callbacks.onBlur && callbacks.onBlur();
   });
 
-  // --- touch (two-thumb: left/right zones + jump/tether buttons) ---
-  const touches = { left: false, right: false, jump: false, tether: false, down: false };
-  let jumpQueued = false;
-  let tetherQueued = false;
-
-  const onTouchStart = (e) => {
-    e.preventDefault();
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    for (const t of e.changedTouches) {
-      const x = t.clientX, y = t.clientY;
-      if (x < w / 2) { touches.left = x < w * 0.5; touches.down = y > h * 0.82; }
-      else touches.right = true;
-      // right-thumb action buttons
-      if (x > w * 0.62 && y > h * 0.6 && y < h * 0.78) { tetherQueued = true; touches.tether = true; }
-      else if (x > w * 0.82 && y > h * 0.6) { jumpQueued = true; touches.jump = true; }
-      else if (x > w * 0.5) { touches.right = true; }
-    }
-  };
-  const onTouchEnd = (e) => {
-    e.preventDefault();
-    for (const t of e.changedTouches) {
-      const x = t.clientX;
-      if (x < window.innerWidth / 2) { touches.left = false; touches.down = false; }
-      else { touches.right = false; touches.jump = false; touches.tether = false; }
-    }
-  };
-  const el = document.getElementById('stage') || window;
-  el.addEventListener('touchstart', onTouchStart, { passive: false });
-  el.addEventListener('touchmove', onTouchStart, { passive: false });
-  el.addEventListener('touchend', onTouchEnd, { passive: false });
-  el.addEventListener('touchcancel', onTouchEnd, { passive: false });
-
   // --- gamepad ---
   let padIndex = -1;
   let padJumpPrev = false; // edge-detect A/B so holding jump never re-triggers
@@ -103,15 +226,17 @@ export function createInput(callbacks) {
 
   // --- read intent for the current tick ---
   api.read = () => {
-    let left = keys.has('left') || touches.left;
-    let right = keys.has('right') || touches.right;
-    const down = keys.has('down') || touches.down;
+    const zoneActive = (z) => { for (const v of touches.values()) if (v === z) return true; return false; };
+
+    let left = keys.has('left') || zoneActive('left');
+    let right = keys.has('right') || zoneActive('right');
+    const down = keys.has('down') || zoneActive('down');
 
     // One-shot presses: drained exactly once per tick. `consume` is set true by
     // the game loop before each read() (main.js), so the press queue empties
     // once per tick and a keypress never latches into later ticks.
     let jumpPressed = false;
-    let jumpHeld = keys.has('jump') || touches.jump;
+    let jumpHeld = keys.has('jump') || zoneActive('jump');
     if (consume && pressQueue.includes('jump')) {
       jumpPressed = true;
       pressQueue.splice(pressQueue.indexOf('jump'), 1);

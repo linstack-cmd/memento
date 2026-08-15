@@ -224,6 +224,36 @@ ok('lands on a narrow 1-tile platform only when centered', () => {
   assert(Math.abs(s.player.y - (1 * TILE - 24)) < 0.01, 'feet rest on the one-way top');
 });
 
+ok('world-boundary clamp: holding left at spawn cannot fall off the left edge (item 13)', () => {
+  // Spawn 2 tiles from the left edge on a full floor. Before the clamp, the
+  // center column left the grid, the floor "vanished", and the moth fell into
+  // the left-edge void (deaths=1). Now x must clamp to 0 and no death occurs.
+  const lvl = mkLevel([
+    'P...........G',
+    '############',
+  ]);
+  const s = fresh(lvl);
+  run(s, lvl, makeInput({ left: true }), 240);
+  assert(s.player.x >= 0, 'player x never goes below 0 (x=' + s.player.x.toFixed(2) + ')');
+  assert(s.player.x + s.player.w <= s.W * TILE, 'player x never exceeds level width (right=' + (s.player.x + s.player.w).toFixed(2) + ')');
+  assert(s.deaths === 0, 'no left-edge void death while holding left (deaths=' + s.deaths + ')');
+  assert(s.player.grounded, 'player stays grounded on the floor at the edge');
+});
+
+ok('world-boundary clamp: holding right at the far edge cannot leave the level', () => {
+  const lvl = mkLevel([
+    'P...........G',
+    '############',
+  ]);
+  const s = fresh(lvl);
+  // teleport the player near the right edge, then hold right
+  s.player.x = s.W * TILE - 40;
+  s.player.y = 0 * TILE - 24; s.player.grounded = true;
+  run(s, lvl, makeInput({ right: true }), 240);
+  assert(s.player.x + s.player.w <= s.W * TILE + 0.001, 'player right edge never exceeds level width (right=' + (s.player.x + s.player.w).toFixed(2) + ')');
+  assert(s.deaths === 0, 'no out-of-bounds death on the right (deaths=' + s.deaths + ')');
+});
+
 // ---------------------------------------------------------------------------
 // 4. Tether: placement, overlap, recall resolution, cooldown
 // ---------------------------------------------------------------------------

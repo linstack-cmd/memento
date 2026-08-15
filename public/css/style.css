@@ -39,13 +39,89 @@ canvas#game {
 #hud {
   position: absolute; top: 0; left: 0; right: 0;
   display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 12px 16px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   pointer-events: none;
   transition: opacity 0.3s;
+  gap: 8px;
 }
 #hud.hidden, .hidden { display: none !important; }
 .hud-left, .hud-right { display: flex; gap: 8px; }
 .hud-center { pointer-events: none; }
+
+/* Narrow screens (item 10): keep pause/mute inside the viewport. Drop the level
+   name chip and shrink chips so the HUD never overflows on portrait phones. */
+@media (max-width: 560px) {
+  #hud { padding: max(8px, env(safe-area-inset-top)) 10px 0; gap: 6px; }
+  #hud-level { display: none; }
+  .hud-chip { font-size: 11px; padding: 4px 8px; letter-spacing: 0; }
+  .hud-btn { width: 28px; height: 28px; font-size: 12px; }
+}
+
+/* --- Touch controls (item 8) ---
+   Shown only on coarse-pointer devices. Fixed to the bottom with safe-area
+   padding; the container is pointer-events:none so taps on the gaps fall
+   through to the canvas zones below, while each button is interactive. */
+#touch-controls {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  z-index: 5;
+  display: none;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  pointer-events: none;
+  -webkit-user-select: none; user-select: none;
+}
+@media (pointer: coarse) { #touch-controls { display: flex; } }
+#touch-controls .touch-cluster { display: flex; gap: 12px; pointer-events: none; }
+.touch-btn {
+  pointer-events: auto;
+  min-width: 66px; height: 56px;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 220, 200, 0.35);
+  background: rgba(6, 18, 24, 0.55);
+  color: var(--teal);
+  font-size: 14px; font-weight: 700; letter-spacing: 1px;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.touch-btn.btn-move { font-size: 22px; min-width: 56px; }
+.touch-btn.btn-action { color: var(--gold); }
+.touch-btn:active {
+  background: rgba(140, 220, 200, 0.28);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* --- Rotate-device prompt (item 9) --- */
+#rotate-prompt {
+  position: fixed; inset: 0;
+  z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px;
+  background: rgba(3, 10, 14, 0.45);
+  pointer-events: none; /* never blocks input */
+  text-align: center;
+  color: var(--text);
+}
+#rotate-prompt .rotate-icon {
+  font-size: 52px; line-height: 1;
+  color: var(--gold);
+  animation: rotate-nudge 2.2s ease-in-out infinite;
+}
+#rotate-prompt p {
+  font-size: 15px; letter-spacing: 0.5px;
+  background: rgba(6, 18, 24, 0.78);
+  border: 1px solid var(--line);
+  padding: 9px 18px; border-radius: 22px;
+}
+@keyframes rotate-nudge {
+  0%, 100% { transform: rotate(-45deg); }
+  50%      { transform: rotate(45deg); }
+}
 .hud-chip {
   font-size: 13px; letter-spacing: 0.5px;
   padding: 5px 10px; border-radius: 20px;
@@ -107,6 +183,13 @@ h2 { color: var(--gold); letter-spacing: 3px; margin-bottom: 10px; }
   background: rgba(140, 220, 200, 0.08);
   border: 1px solid var(--line);
   color: var(--muted);
+}
+/* Touch instructions (item 9): show touch hints instead of keyboard hints on
+   coarse-pointer devices. */
+.touch-keys { display: none; }
+@media (pointer: coarse) {
+  .keyboard-keys { display: none; }
+  .touch-keys { display: flex; }
 }
 
 .btn-big {

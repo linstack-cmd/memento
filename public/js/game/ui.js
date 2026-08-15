@@ -12,6 +12,7 @@ export function createUI() {
     hudDeaths: $('hud-deaths'),
     btnMute: $('btn-mute'),
     btnPause: $('btn-pause'),
+    touchControls: $('touch-controls'),
     title: $('overlay-title'),
     intro: $('overlay-levelintro'),
     complete: $('overlay-complete'),
@@ -93,6 +94,13 @@ export function createUI() {
   function hideTitle() { hide(els.title); }
   function showHUD() { show(els.hud); }
   function hideHUD() { hide(els.hud); }
+  // Touch controls (◀ ▶ JUMP TETHER) are shown only during live gameplay.
+  function setTouchControlsVisible(on) {
+    if (els.touchControls) {
+      if (on) els.touchControls.classList.remove('hidden');
+      else els.touchControls.classList.add('hidden');
+    }
+  }
   function showPause() { show(els.pause); }
   function hidePause() { hide(els.pause); }
   function isPauseVisible() { return !els.pause.classList.contains('hidden'); }
@@ -100,6 +108,7 @@ export function createUI() {
   return {
     els, bind, setHUD, setCooldown, setDeaths, renderTitleProgress,
     showIntro, hideIntro, showComplete, hideComplete, showEnd, hideEnd,
-    showTitle, hideTitle, showHUD, hideHUD, showPause, hidePause, isPauseVisible,
+    showTitle, hideTitle, showHUD, hideHUD, setTouchControlsVisible,
+    showPause, hidePause, isPauseVisible,
   };
 }

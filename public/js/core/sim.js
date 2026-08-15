@@ -194,6 +194,16 @@ function solidForX(level, tx, ty) {
 function moveX(state, level) {
   const p = state.player;
   p.x += p.vx;
+
+  // World-boundary clamp (item 13): the player must never leave the level.
+  // Without this, walking left from a spawn near the edge pushed the AABB
+  // center column out of bounds, the floor vanished, and the moth fell into
+  // the left-edge void death. Clamp BEFORE the `vx === 0` early-out so a
+  // clamped player at the exact boundary is always resolved.
+  const maxX = state.W * TILE - p.w;
+  if (p.x < 0) { p.x = 0; p.vx = 0; }
+  else if (p.x > maxX) { p.x = maxX; p.vx = 0; }
+
   if (p.vx === 0) return;
 
   const top = Math.floor(p.y / TILE);

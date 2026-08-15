@@ -29,15 +29,39 @@
         </div>
       </div>
 
+      <!-- Touch controls (item 8): visible only on coarse-pointer devices and
+           only during gameplay (toggled by main.js). Labels match the zones. -->
+      <div id="touch-controls" class="hidden" aria-hidden="true">
+        <div class="touch-cluster">
+          <button id="btn-left" class="touch-btn btn-move" aria-label="Move left">◀</button>
+          <button id="btn-right" class="touch-btn btn-move" aria-label="Move right">▶</button>
+        </div>
+        <div class="touch-cluster">
+          <button id="btn-jump" class="touch-btn btn-action" aria-label="Jump">JUMP</button>
+          <button id="btn-tether" class="touch-btn btn-action" aria-label="Tether">TETHER</button>
+        </div>
+      </div>
+
+      <!-- Rotate-device prompt (item 9): shown only in portrait on touch devices
+           during gameplay; pointer-events none so it never blocks input. -->
+      <div id="rotate-prompt" class="hidden">
+        <div class="rotate-icon">⟲</div>
+        <p>Rotate your device for the best climb</p>
+      </div>
+
       <!-- Overlays -->
       <div id="overlay-title" class="overlay">
         <div class="panel">
           <h1 class="title-word">TETHER</h1>
           <p class="subtitle">the last light-moth ascending a derelict greenhouse</p>
           <p class="hint">Place a light anchor — press again to recall to it. Collect every mote to open the gate.</p>
-          <div class="keys">
+          <div class="keys keyboard-keys">
             <span>← → / A D move</span><span>Space / W / ↑ jump</span><span>X / K tether</span>
             <span>↓+jump drop</span><span>P pause</span><span>R restart</span>
+          </div>
+          <div class="keys touch-keys">
+            <span>◀ ▶ move</span><span>tap JUMP to flap</span><span>tap TETHER to place / recall</span>
+            <span>hold to climb higher</span>
           </div>
           <button id="btn-play" class="btn-big">Begin the Ascent</button>
           <button id="btn-continue" class="btn-big hidden">Continue</button>

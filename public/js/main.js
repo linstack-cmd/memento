@@ -68,6 +68,53 @@ let lastFrame = performance.now();
 let introTimer = 0;
 
 // ---------------------------------------------------------------------------
+// Touch gating (items 11, 12) — gameplay touch zones live ONLY while
+// playing && !paused && no overlay && past the level intro. The DOM touch
+// buttons are shown/hidden to match. Called whenever the gating inputs change
+// and on resize/orientation.
+// ---------------------------------------------------------------------------
+function updateTouchGate() {
+  const active = playing && !paused && !levelCompleteShown && introTimer <= 0;
+  input.setTouchEnabled(active);
+  ui.setTouchControlsVisible(active);
+  updateRotatePrompt();
+}
+
+// Portrait "rotate device" prompt (item 9): shown only in portrait on
+// coarse-pointer devices while actively playing. pointer-events:none in CSS so
+// it can never block input.
+function updateRotatePrompt() {
+  const el = document.getElementById('rotate-prompt');
+  if (!el) return;
+  const portrait = !!(window.matchMedia && window.matchMedia('(orientation: portrait)').matches);
+  const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  const show = portrait && coarse && playing && !paused && !levelCompleteShown && introTimer <= 0;
+  el.classList.toggle('hidden', !show);
+}
+
+// Wire a button so it fires on BOTH 'click' (mouse/keyboard) and 'pointerup'
+// (touch) — item 11: a preventDefault regression can never re-brick the
+// critical buttons. A touch pointerup handles it first; the synthesized click
+// that follows is deduped.
+function bindTap(el, fn) {
+  if (!el) return;
+  let lastPointerUp = -Infinity; // never set yet → clicks are never wrongly deduped
+  el.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'mouse') { lastPointerUp = performance.now(); fn(e); }
+  });
+  el.addEventListener('click', (e) => {
+    if (performance.now() - lastPointerUp < 400) return;
+    fn(e);
+  });
+}
+
+window.addEventListener('resize', () => { updateTouchGate(); });
+window.addEventListener('orientationchange', () => { updateTouchGate(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && playing && !paused) pauseGame();
+});
+
+// ---------------------------------------------------------------------------
 // Presentation-only event detection (SFX / feedback). These read state deltas
 // and never mutate the sim. The snap/fire logic lives in game/events.js so it
 // is unit-testable in Node; fireEvents(state, prev, audio.sfx) is called each
@@ -100,12 +147,14 @@ function startLevel(index, forceRestart = false) {
   paused = false;
   playing = true;
   input.clear();
+  updateTouchGate();
 }
 
 function completeLevel() {
   playing = false;
   levelCompleteShown = true;
   ui.hideHUD();
+  updateTouchGate(); // touch zones + rotate prompt off
   audio.sfx.win();
   const final = currentIndex >= LEVELS.length - 1;
   const par = currentLevel.par || 60;
@@ -129,12 +178,14 @@ function pauseGame() {
   if (!playing || levelCompleteShown) return;
   paused = true;
   ui.showPause();
+  updateTouchGate(); // zones + touch buttons + rotate prompt off while paused
 }
 function resumeGame() {
   paused = false;
   ui.hidePause();
   input.clear();
   lastFrame = performance.now();
+  updateTouchGate();
 }
 
 function tick() {
@@ -142,7 +193,10 @@ function tick() {
 
   if (introTimer > 0) {
     introTimer--;
-    if (introTimer === 0) ui.hideIntro();
+    if (introTimer === 0) {
+      ui.hideIntro();
+      updateTouchGate(); // gameplay zones go live once the intro overlay clears
+    }
   }
 
   // B1: drain the one-shot press queue exactly once per tick — without this,
@@ -159,6 +213,7 @@ function tick() {
   if (state.deaths > prevDeaths) {
     camera.addTrauma(0.7);
     audio.sfx.death();
+    input.clear(); // item 6: held touches/keys must not leak across respawn
     renderer.burst(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, 'spark', 18, { color: '#ff9b6a', life: 24 });
   }
   prevDeaths = state.deaths;
@@ -211,51 +266,54 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------------------
-// Title / flow wiring
+// Title / flow wiring — every button is wired via bindTap() so it responds to
+// touch pointerup as well as click (item 11).
 // ---------------------------------------------------------------------------
 ui.renderTitleProgress(saveData.unlocked, LEVELS.length);
-ui.els.btnPlay.addEventListener('click', () => {
+bindTap(ui.els.btnPlay, () => {
   audio.unlock();
   startLevel(saveData.unlocked - 1);
   ui.hideTitle();
 });
-ui.els.btnContinue.addEventListener('click', () => {
+bindTap(ui.els.btnContinue, () => {
   audio.unlock();
   const resumeIndex = Math.min(saveData.unlocked - 1, LEVELS.length - 1);
   startLevel(resumeIndex);
   ui.hideTitle();
 });
-ui.els.btnNext.addEventListener('click', () => {
+bindTap(ui.els.btnNext, () => {
   ui.hideComplete();
   startLevel(currentIndex + 1);
 });
-ui.els.btnReplay.addEventListener('click', () => {
+bindTap(ui.els.btnReplay, () => {
   ui.hideEnd();
   save.writeSave({ unlocked: 1 });
   ui.renderTitleProgress(1, LEVELS.length);
   ui.showTitle();
   playing = false;
+  updateTouchGate();
 });
-ui.els.btnResume.addEventListener('click', resumeGame);
-ui.els.btnMotion.addEventListener('click', () => {
+bindTap(ui.els.btnResume, resumeGame);
+bindTap(ui.els.btnMotion, () => {
   saveData.reducedMotion = !saveData.reducedMotion;
   save.writeSave({ reducedMotion: saveData.reducedMotion });
   ui.els.btnMotion.textContent = 'Reduce Motion: ' + (saveData.reducedMotion ? 'On' : 'Off');
 });
-ui.els.btnRestart.addEventListener('click', () => startLevel(currentIndex, true));
-ui.els.btnQuit.addEventListener('click', () => {
+bindTap(ui.els.btnRestart, () => startLevel(currentIndex, true));
+bindTap(ui.els.btnQuit, () => {
   playing = false;
   paused = false;
   ui.hidePause(); ui.hideHUD();
   ui.renderTitleProgress(save.loadSave().unlocked, LEVELS.length);
   ui.showTitle();
+  updateTouchGate();
 });
 ui.els.btnMotion.textContent = 'Reduce Motion: ' + (saveData.reducedMotion ? 'On' : 'Off');
-ui.els.btnMute.addEventListener('click', () => {
+bindTap(ui.els.btnMute, () => {
   const m = !audio.isMuted(); audio.setMuted(m); save.writeSave({ muted: m });
   ui.els.btnMute.textContent = m ? '∅' : '♪';
 });
-ui.els.btnPause.addEventListener('click', togglePause);
+bindTap(ui.els.btnPause, togglePause);
 
 // unlock audio on any first gesture
 const unlockOnce = () => { audio.unlock(); };
@@ -263,6 +321,7 @@ window.addEventListener('pointerdown', unlockOnce, { once: true });
 window.addEventListener('keydown', unlockOnce, { once: true });
 
 fitCanvas();
+updateTouchGate(); // start with touch zones off (title screen)
 requestAnimationFrame(frame);
 
 // Read-only debug/test hook — used by tools/browser-smoke.js (tier-2 browser
@@ -282,4 +341,5 @@ window.__tetherDebug = () => (state ? {
   deaths: state.deaths,
   won: state.won,
   level: currentIndex,
+  touch: { enabled: input.isTouchEnabled(), zones: [...input.getTouchZones().values()] },
 } : null);
