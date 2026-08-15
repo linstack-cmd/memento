@@ -9,7 +9,11 @@ const KEYMAP = {
   ArrowLeft: 'left', KeyA: 'left',
   ArrowRight: 'right', KeyD: 'right',
   ArrowDown: 'down', KeyS: 'down',
-  ArrowUp: 'up', KeyW: 'up', Space: 'jump', KeyZ: 'jump',
+  // W / ↑ map straight to jump. The old 'up' intent was advertised (title,
+  // README: "Space / W / ↑ jump") but read() never consumed it, so W/↑ were
+  // dead keys. Remapping to 'jump' gives W/↑ the exact same press+hold
+  // semantics as Space/Z.
+  ArrowUp: 'jump', KeyW: 'jump', Space: 'jump', KeyZ: 'jump',
   KeyX: 'tether', KeyK: 'tether',
   KeyP: 'pause', Escape: 'pause',
   KeyR: 'restart',
@@ -32,7 +36,9 @@ export function createInput(callbacks) {
   window.addEventListener('keydown', (e) => {
     const code = e.code;
     const mapped = KEYMAP[code];
-    if (mapped === 'left' || mapped === 'right' || mapped === 'down' || mapped === 'up') e.preventDefault();
+    // preventDefault on movement + jump so arrows/Space never scroll the page
+    // ('up' no longer exists as an intent — ArrowUp is now 'jump').
+    if (mapped === 'left' || mapped === 'right' || mapped === 'down' || mapped === 'jump') e.preventDefault();
     if (mapped === 'jump' && e.repeat) return;
     if (mapped === 'tether' && e.repeat) return;
     if (mapped) {

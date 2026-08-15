@@ -10,6 +10,7 @@ import { createCamera } from './game/camera.js';
 import { createRenderer } from './game/render.js';
 import { createAudio } from './game/audio.js';
 import { createUI } from './game/ui.js';
+import { fireEvents, snapEvents } from './game/events.js';
 import * as save from './game/save.js';
 
 const TICK_MS = 1000 / TICK_RATE;
@@ -68,47 +69,11 @@ let introTimer = 0;
 
 // ---------------------------------------------------------------------------
 // Presentation-only event detection (SFX / feedback). These read state deltas
-// and never mutate the sim.
+// and never mutate the sim. The snap/fire logic lives in game/events.js so it
+// is unit-testable in Node; fireEvents(state, prev, audio.sfx) is called each
+// tick after step(). snapEvents() includes `deaths` — without it, prev.deaths
+// is undefined and the tether-recall SFX would be suppressed every tick.
 // ---------------------------------------------------------------------------
-function snapEvents(s) {
-  const p = s.player;
-  return {
-    grounded: p.grounded,
-    jumpsUsed: p.jumpsUsed,
-    tether: !!s.tether,
-    collected: s.collectedCount,
-    gateOpen: s.gateOpen,
-    onLantern: lanternOverlap(s),
-    tick: s.tick,
-  };
-}
-
-function lanternOverlap(s) {
-  const p = s.player;
-  for (const l of s.lanterns) {
-    if (p.x < l.x + l.w && p.x + p.w > l.x && p.y < l.y + l.h && p.y + p.h > l.y) return true;
-  }
-  return false;
-}
-
-// Fire the authored SFX set on state transitions (recommended #7 — only
-// death/win played before; jump/double-jump/land/tether/mote/gate/lantern are
-// now wired to real sim deltas).
-function fireEvents(prev) {
-  const p = state.player;
-  if (p.jumpsUsed > prev.jumpsUsed) {
-    if (p.jumpsUsed >= 2) audio.sfx.doubleJump();
-    else audio.sfx.jump();
-  }
-  if (p.grounded && !prev.grounded) audio.sfx.land();
-  if (state.tether && !prev.tether) audio.sfx.tetherPlace();
-  else if (!state.tether && prev.tether && state.deaths === prev.deaths) audio.sfx.tetherRecall();
-  if (state.collectedCount > prev.collected) audio.sfx.mote();
-  if (state.gateOpen && !prev.gateOpen) audio.sfx.gateOpen();
-  // lantern SFX on the rising edge of touching a lantern (not on natural
-  // cooldown expiry)
-  if (lanternOverlap(state) && !prev.onLantern) audio.sfx.lantern();
-}
 
 // ---------------------------------------------------------------------------
 // Level lifecycle
@@ -188,7 +153,7 @@ function tick() {
   step(state, intent, currentLevel);
 
   // presentation-only event SFX (never mutates the sim)
-  fireEvents(prev);
+  fireEvents(state, prev, audio.sfx);
 
   // death detection (deaths counter increments on death → reset)
   if (state.deaths > prevDeaths) {

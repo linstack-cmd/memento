@@ -7,6 +7,8 @@
 //   - tetherPressed is true on the press tick, false next tick
 //   - jumpHeld is true while Space is held, false after keyup (no latching)
 //   - movement keys latch while held and clear on keyup
+//   - W / ↑ are jump keys (previously mapped to a dead 'up' intent) with the
+//     same press/hold/auto-repeat semantics as Space
 //
 //   node tests/input.dom.test.js
 
@@ -95,10 +97,31 @@ dispatch(winHandlers, 'keyup', 'ArrowRight');
 const r10 = tick();
 assert(r10.right === false, 'right false after keyup');
 
+// --- W / ↑ map to jump (Fix: the old 'up' intent was advertised but never
+// consumed by read(); now W and ↑ are real jump keys with Space semantics) ---
+console.log('\nW / ↑ as jump:');
+
 dispatch(winHandlers, 'keydown', 'KeyW');
 const r11 = tick();
-assert(r11.left === false && r11.right === false, 'KeyW (up) is not a move key');
+assert(r11.jumpPressed === true && r11.jumpHeld === true, 'KeyW fires jump (press + hold)');
+assert(r11.left === false && r11.right === false, 'KeyW is not a move key');
 dispatch(winHandlers, 'keyup', 'KeyW');
+const r11b = tick();
+assert(r11b.jumpPressed === false && r11b.jumpHeld === false, 'KeyW jump drains and clears on keyup');
+
+dispatch(winHandlers, 'keydown', 'ArrowUp');
+const r11c = tick();
+assert(r11c.jumpPressed === true && r11c.jumpHeld === true, 'ArrowUp fires jump (press + hold)');
+assert(r11c.left === false && r11c.right === false, 'ArrowUp is not a move key');
+dispatch(winHandlers, 'keyup', 'ArrowUp');
+const r11d = tick();
+assert(r11d.jumpPressed === false && r11d.jumpHeld === false, 'ArrowUp jump drains and clears on keyup');
+
+// holding ↑ must not auto-repeat into extra jumps (same guard as Space)
+dispatch(winHandlers, 'keydown', 'ArrowUp', { repeat: true });
+const r11e = tick();
+assert(r11e.jumpPressed === false, 'auto-repeat ArrowUp does not re-queue a press');
+dispatch(winHandlers, 'keyup', 'ArrowUp');
 
 // --- repeat presses queue correctly (two presses = two jumps across ticks) ---
 console.log('\nRapid presses:');

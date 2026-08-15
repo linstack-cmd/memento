@@ -10,7 +10,7 @@
     "headless": "node tools/headless.js",
     "solve": "node tools/reachability.js",
     "determinism": "node tools/determinism.js",
-    "test": "node tests/physics.test.js && node tests/input.dom.test.js",
+    "test": "node tests/physics.test.js && node tests/input.dom.test.js && node tests/events.test.js",
     "smoke": "node tools/browser-smoke.js",
     "verify": "npm run bundle && npm run validate && npm run headless && npm run solve && npm run determinism && npm test"
   }
