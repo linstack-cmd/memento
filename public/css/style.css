@@ -1,0 +1,132 @@
+/* TETHER — presentation styling (fixed 960x540 letterbox, DPR-capped canvas) */
+
+:root {
+  --bg: #06131a;
+  --panel: rgba(8, 22, 30, 0.82);
+  --line: rgba(140, 220, 200, 0.18);
+  --gold: #ffd27a;
+  --teal: #8fe8d0;
+  --text: #d8efe8;
+  --muted: #7fa89e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+
+#app, #stage { position: fixed; inset: 0; }
+
+#stage {
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(120% 90% at 50% 30%, #0a1f2a 0%, #041017 60%, #02090e 100%);
+}
+
+canvas#game {
+  image-rendering: auto;
+  box-shadow: 0 0 80px rgba(0,0,0,0.6);
+  background: #07141c;
+}
+
+/* HUD */
+#hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 12px 16px;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+#hud.hidden, .hidden { display: none !important; }
+.hud-left, .hud-right { display: flex; gap: 8px; }
+.hud-center { pointer-events: none; }
+.hud-chip {
+  font-size: 13px; letter-spacing: 0.5px;
+  padding: 5px 10px; border-radius: 20px;
+  background: rgba(6, 18, 24, 0.72);
+  border: 1px solid var(--line);
+  color: var(--text);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+#hud-cooldown.ready { color: var(--gold); }
+#hud-cooldown.cooling { color: #ff9b6a; }
+.hud-btn {
+  pointer-events: auto;
+  font-size: 14px; width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(6, 18, 24, 0.72);
+  color: var(--text); cursor: pointer;
+}
+.hud-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+/* Overlays */
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(3, 10, 14, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 10;
+  animation: fadein 0.4s ease;
+}
+.overlay.dim { background: rgba(3, 10, 14, 0.35); }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+.panel {
+  max-width: 560px; width: 90%;
+  text-align: center;
+  padding: 34px 40px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.panel.small { max-width: 420px; padding: 26px 32px; }
+
+.title-word {
+  font-size: 58px; letter-spacing: 12px;
+  color: var(--gold);
+  text-shadow: 0 0 30px rgba(255, 210, 122, 0.5);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.subtitle { color: var(--muted); margin-bottom: 16px; font-style: italic; }
+.hint { color: var(--text); margin: 10px 0; line-height: 1.5; }
+h2 { color: var(--gold); letter-spacing: 3px; margin-bottom: 10px; }
+
+.keys { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 16px 0 22px; }
+.keys span {
+  font-size: 11px; padding: 4px 9px; border-radius: 6px;
+  background: rgba(140, 220, 200, 0.08);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.btn-big {
+  font-size: 17px; letter-spacing: 1.5px;
+  padding: 13px 34px; border-radius: 30px;
+  border: 1px solid rgba(255, 210, 122, 0.6);
+  background: linear-gradient(180deg, rgba(255,210,122,0.16), rgba(255,210,122,0.06));
+  color: var(--gold); cursor: pointer;
+  margin: 6px;
+}
+.btn-big:hover { background: rgba(255,210,122,0.24); }
+.btn {
+  font-size: 14px; padding: 9px 22px; border-radius: 22px;
+  border: 1px solid var(--line); background: rgba(140,220,200,0.08);
+  color: var(--text); cursor: pointer; margin: 6px;
+}
+.btn:hover { border-color: var(--gold); }
+
+#title-progress { margin-top: 14px; font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+#title-progress .dot { display:inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 2px; background: rgba(140,220,200,0.18); }
+#title-progress .dot.unlocked { background: var(--gold); }
+
+#complete-stats, #end-stats { color: var(--muted); margin-bottom: 14px; line-height: 1.7; }

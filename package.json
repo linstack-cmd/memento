@@ -1,0 +1,17 @@
+{
+  "name": "tether",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TETHER — a luminous moth ascending a derelict greenhouse. Vanilla ES modules, Canvas 2D, zero runtime dependencies.",
+  "scripts": {
+    "bundle": "node tools/bundle.js",
+    "validate": "node tools/validate.js",
+    "headless": "node tools/headless.js",
+    "solve": "node tools/reachability.js",
+    "determinism": "node tools/determinism.js",
+    "test": "node tests/physics.test.js && node tests/input.dom.test.js",
+    "smoke": "node tools/browser-smoke.js",
+    "verify": "npm run bundle && npm run validate && npm run headless && npm run solve && npm run determinism && npm test"
+  }
+}
